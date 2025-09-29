@@ -7,6 +7,7 @@
     app_dir: /opt/ioagoppro
     venv_dir: /opt/ioagoppro/venv
     repo_url: https://github.com/adenadoume/ioagoppro.git
+    django_project_name: ioagoppro
     domain: dev.agop.pro
     db_name: ioagoppro_db
     db_user: ioagoppro_user
@@ -101,6 +102,13 @@
         virtualenv: "{{ venv_dir }}"
       become_user: "{{ app_user }}"
       notify: restart app
+
+    - name: Create Django project if needed
+      command: "{{ venv_dir }}/bin/python {{ app_dir }}/django_setup.py"
+      args:
+        chdir: "{{ app_dir }}"
+      become_user: "{{ app_user }}"
+      ignore_errors: yes
 
     - name: Setup PostgreSQL database
       become_user: postgres
