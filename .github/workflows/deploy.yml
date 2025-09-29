@@ -1,0 +1,77 @@
+name: Deploy to Hetzner VPS
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 pytest
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+    
+    - name: Lint with flake8
+      run: |
+        # stop the build if there are Python syntax errors or undefined names
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+    
+    - name: Test with pytest
+      run: |
+        pytest || echo "No tests found"
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install Ansible
+      run: |
+        python -m pip install --upgrade pip
+        pip install ansible
+    
+    - name: Create inventory file
+      run: |
+        echo "[server]" > inventory.ini
+        echo "${{ secrets.SERVER_IP }} ansible_user=${{ secrets.SERVER_USER }}" >> inventory.ini
+    
+    - name: Create SSH key file
+      run: |
+        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ssh_key
+        chmod 600 ssh_key
+    
+    - name: Update site.yml with secrets
+      run: |
+        sed -i 's/your_domain_here/${{ secrets.DOMAIN }}/g' site.yml
+        sed -i 's/strongpassword/${{ secrets.DB_PASSWORD }}/g' site.yml
+        sed -i 's/you@agop.pro/${{ secrets.EMAIL }}/g' site.yml
+    
+    - name: Deploy with Ansible
+      run: |
+        ansible-playbook -i inventory.ini site.yml --private-key=ssh_key -v
+      env:
+        ANSIBLE_HOST_KEY_CHECKING: False

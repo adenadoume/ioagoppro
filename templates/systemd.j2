@@ -1,0 +1,33 @@
+[Unit]
+Description=Gunicorn instance to serve {{ app_name }}
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+User={{ app_user }}
+Group=www-data
+WorkingDirectory={{ app_dir }}
+Environment="PATH={{ venv_dir }}/bin"
+EnvironmentFile={{ app_dir }}/.env
+ExecStart={{ venv_dir }}/bin/gunicorn \
+    --workers 3 \
+    --worker-class gevent \
+    --worker-connections 1000 \
+    --bind unix:{{ app_dir }}/{{ app_name }}.sock \
+    --timeout 120 \
+    --keepalive 5 \
+    --max-requests 1000 \
+    --max-requests-jitter 100 \
+    --log-level info \
+    --access-logfile {{ app_dir }}/logs/access.log \
+    --error-logfile {{ app_dir }}/logs/error.log \
+    {{ app_name }}.wsgi:application
+ExecReload=/bin/kill -s HUP $MAINPID
+Restart=always
+RestartSec=3
+KillMode=mixed
+TimeoutStopSec=5
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

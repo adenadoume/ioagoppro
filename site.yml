@@ -1,0 +1,199 @@
+---
+- hosts: all
+  become: yes
+  vars:
+    app_name: ioagoppro
+    app_user: django
+    app_dir: /opt/ioagoppro
+    venv_dir: /opt/ioagoppro/venv
+    repo_url: https://github.com/adenadoume/ioagoppro.git
+    domain: your_domain_here
+    db_name: ioagoppro_db
+    db_user: ioagoppro_user
+    db_password: strongpassword
+    python_version: python3.11
+  
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install required packages
+      apt:
+        name:
+          - python3-pip
+          - python3-venv
+          - python3.11
+          - python3.11-venv
+          - git
+          - nginx
+          - postgresql
+          - postgresql-contrib
+          - libpq-dev
+          - python3-dev
+          - build-essential
+          - certbot
+          - python3-certbot-nginx
+          - supervisor
+          - ufw
+        state: present
+
+    - name: Configure UFW firewall
+      ufw:
+        rule: allow
+        port: "{{ item }}"
+      loop:
+        - '22'
+        - '80'
+        - '443'
+
+    - name: Enable UFW
+      ufw:
+        state: enabled
+
+    - name: Create app user
+      user:
+        name: "{{ app_user }}"
+        system: yes
+        create_home: yes
+        shell: /bin/bash
+
+    - name: Create app directory
+      file:
+        path: "{{ app_dir }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: '0755'
+
+    - name: Clone repo
+      git:
+        repo: "{{ repo_url }}"
+        dest: "{{ app_dir }}"
+        version: main
+        force: yes
+      notify: restart app
+
+    - name: Set ownership of app directory
+      file:
+        path: "{{ app_dir }}"
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        recurse: yes
+
+    - name: Create virtualenv
+      command: "{{ python_version }} -m venv {{ venv_dir }}"
+      args:
+        creates: "{{ venv_dir }}/bin/activate"
+      become_user: "{{ app_user }}"
+
+    - name: Upgrade pip in virtualenv
+      pip:
+        name: pip
+        state: latest
+        virtualenv: "{{ venv_dir }}"
+      become_user: "{{ app_user }}"
+
+    - name: Install requirements
+      pip:
+        requirements: "{{ app_dir }}/requirements.txt"
+        virtualenv: "{{ venv_dir }}"
+      become_user: "{{ app_user }}"
+      notify: restart app
+
+    - name: Setup PostgreSQL database
+      become_user: postgres
+      postgresql_db:
+        name: "{{ db_name }}"
+        state: present
+
+    - name: Create DB user
+      become_user: postgres
+      postgresql_user:
+        name: "{{ db_user }}"
+        password: "{{ db_password }}"
+        priv: "ALL"
+        db: "{{ db_name }}"
+        state: present
+
+    - name: Create .env file
+      template:
+        src: env.j2
+        dest: "{{ app_dir }}/.env"
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: '0600'
+      notify: restart app
+
+    - name: Run migrations
+      command: "{{ venv_dir }}/bin/python manage.py migrate"
+      args:
+        chdir: "{{ app_dir }}"
+      become_user: "{{ app_user }}"
+
+    - name: Collect static files
+      command: "{{ venv_dir }}/bin/python manage.py collectstatic --noinput"
+      args:
+        chdir: "{{ app_dir }}"
+      become_user: "{{ app_user }}"
+
+    - name: Create systemd service
+      template:
+        src: systemd.j2
+        dest: /etc/systemd/system/{{ app_name }}.service
+      notify:
+        - reload systemd
+        - restart app
+
+    - name: Create Nginx configuration
+      template:
+        src: nginx.j2
+        dest: /etc/nginx/sites-available/{{ app_name }}
+      notify: restart nginx
+
+    - name: Enable Nginx site
+      file:
+        src: /etc/nginx/sites-available/{{ app_name }}
+        dest: /etc/nginx/sites-enabled/{{ app_name }}
+        state: link
+        force: yes
+      notify: restart nginx
+
+    - name: Remove default Nginx site
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      notify: restart nginx
+
+    - name: Test Nginx configuration
+      command: nginx -t
+      changed_when: false
+
+    - name: Obtain Let's Encrypt certificate
+      command: certbot --nginx -d {{ domain }} --non-interactive --agree-tos -m you@agop.pro
+      args:
+        creates: /etc/letsencrypt/live/{{ domain }}/fullchain.pem
+
+    - name: Setup auto-renewal of SSL certificates
+      cron:
+        name: "Renew Let's Encrypt certificates"
+        minute: "0"
+        hour: "2"
+        job: "/usr/bin/certbot renew --quiet"
+
+  handlers:
+    - name: reload systemd
+      command: systemctl daemon-reload
+
+    - name: restart app
+      systemd:
+        name: "{{ app_name }}"
+        enabled: yes
+        state: restarted
+
+    - name: restart nginx
+      systemd:
+        name: nginx
+        enabled: yes
+        state: restarted

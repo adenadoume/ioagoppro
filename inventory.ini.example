@@ -1,0 +1,20 @@
+# Ansible Inventory Example
+# Copy this file to inventory.ini and update with your server details
+
+[server]
+# Replace with your Hetzner VPS IP address
+your_server_ip ansible_user=root
+
+# Example:
+# 123.456.789.10 ansible_user=root
+
+# If you're using a non-root user:
+# 123.456.789.10 ansible_user=your_username ansible_become=yes
+
+# If using SSH key authentication:
+# 123.456.789.10 ansible_user=root ansible_ssh_private_key_file=~/.ssh/id_rsa
+
+# Connection variables (optional)
+[server:vars]
+# ansible_ssh_port=22
+# ansible_python_interpreter=/usr/bin/python3
