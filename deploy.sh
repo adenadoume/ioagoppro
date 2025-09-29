@@ -32,7 +32,8 @@ fi
 
 # Verify server connectivity
 echo -e "${YELLOW}🔍 Testing server connectivity...${NC}"
-if ansible all -i inventory.ini -m ping; then
+SERVER_IP=$(grep -v '^\[' inventory.ini | grep -v '^#' | grep -v '^$' | head -1 | awk '{print $1}')
+if ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no root@${SERVER_IP} "echo 'Connection successful'"; then
     echo -e "${GREEN}✅ Server is reachable${NC}"
 else
     echo -e "${RED}❌ Cannot reach server. Please check your inventory.ini file.${NC}"
@@ -41,7 +42,8 @@ fi
 
 # Run the playbook
 echo -e "${YELLOW}📦 Running Ansible playbook...${NC}"
-ansible-playbook -i inventory.ini site.yml -v
+export PATH="$PATH:/Users/nucintosh/Library/Python/3.11/bin"
+ansible-playbook -i inventory.ini site.yml --ask-pass -v
 
 echo -e "${GREEN}🎉 Deployment completed successfully!${NC}"
 echo -e "${GREEN}Your application should now be available at your configured domain.${NC}"

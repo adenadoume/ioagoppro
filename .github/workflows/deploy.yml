@@ -66,9 +66,9 @@ jobs:
     
     - name: Update site.yml with secrets
       run: |
-        sed -i 's/your_domain_here/${{ secrets.DOMAIN }}/g' site.yml
+        sed -i 's/dev.agop.pro/${{ secrets.DOMAIN }}/g' site.yml
         sed -i 's/strongpassword/${{ secrets.DB_PASSWORD }}/g' site.yml
-        sed -i 's/you@agop.pro/${{ secrets.EMAIL }}/g' site.yml
+        sed -i 's/agop.website@gmail.com/${{ secrets.EMAIL }}/g' site.yml
     
     - name: Deploy with Ansible
       run: |

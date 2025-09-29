@@ -7,7 +7,7 @@
     app_dir: /opt/ioagoppro
     venv_dir: /opt/ioagoppro/venv
     repo_url: https://github.com/adenadoume/ioagoppro.git
-    domain: your_domain_here
+    domain: dev.agop.pro
     db_name: ioagoppro_db
     db_user: ioagoppro_user
     db_password: strongpassword
@@ -171,7 +171,7 @@
       changed_when: false
 
     - name: Obtain Let's Encrypt certificate
-      command: certbot --nginx -d {{ domain }} --non-interactive --agree-tos -m you@agop.pro
+      command: certbot --nginx -d {{ domain }} --non-interactive --agree-tos -m agop.website@gmail.com
       args:
         creates: /etc/letsencrypt/live/{{ domain }}/fullchain.pem
 
